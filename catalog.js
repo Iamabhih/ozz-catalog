@@ -1,4 +1,4 @@
-// Complete Google Drive Image Integration System - FIXED VERSION
+// Complete Google Drive Image Integration System with Level 2 Image Optimization
 class DriveImageManager {
   constructor() {
     this.imageCache = new Map();
@@ -156,7 +156,7 @@ class DriveImageManager {
     return [...new Set(codes)];
   }
 
-  // FIXED: Get direct image URL for embedding - now uses Google CDN
+  // Get direct image URL for embedding - uses Google CDN
   getDirectImageUrl(fileId) {
     return `https://lh3.googleusercontent.com/d/${fileId}=w800-h800-c`;
   }
@@ -280,7 +280,7 @@ const createEnhancedImageSystem = () => {
   };
 };
 
-// MAIN CATALOG COMPONENT - UPDATED VERSION
+// MAIN CATALOG COMPONENT - UPDATED VERSION WITH LEVEL 2 IMAGE OPTIMIZATION
 const { useState, useEffect, useMemo } = React;
 
 const OzzCatalog = () => {
@@ -301,6 +301,75 @@ const OzzCatalog = () => {
 
   // Initialize the image system
   const imageSystem = useMemo(() => createEnhancedImageSystem(), []);
+
+  // Enhanced Image Container Component (Level 2)
+  const EnhancedImageContainer = ({ product, selectedCategory, setSelectedProduct }) => {
+    const [imageLoaded, setImageLoaded] = useState(false);
+    const [fitMode, setFitMode] = useState('cover'); // 'cover' or 'contain'
+
+    return (
+      <div className="aspect-square bg-gray-50 flex items-center justify-center relative overflow-hidden group">
+        <img 
+          src={imageSystem.getImageUrl(selectedCategory, product.code)}
+          alt={product.description}
+          className={`w-full h-full transition-all duration-300 group-hover:scale-105 ${
+            imageLoaded ? 'opacity-100' : 'opacity-0'
+          }`}
+          style={{
+            objectFit: fitMode,
+            objectPosition: fitMode === 'cover' ? 'center 25%' : 'center',
+            backgroundColor: fitMode === 'contain' ? '#f8fafc' : 'transparent',
+            padding: fitMode === 'contain' ? '8px' : '0'
+          }}
+          loading="lazy"
+          onLoad={(e) => {
+            if (!e.target.src.includes('data:image/svg+xml')) {
+              setImageLoaded(true);
+              console.log(`✅ Image loaded successfully for product ${product.code}`);
+            }
+          }}
+          onError={(e) => {
+            console.warn(`❌ Failed to load image for product ${product.code}`);
+          }}
+        />
+        
+        {/* Loading Animation */}
+        {!imageLoaded && (
+          <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        )}
+        
+        {/* Loading overlay during system initialization */}
+        {!imageSystemReady && (
+          <div className="absolute inset-0 bg-black bg-opacity-10 flex items-center justify-center">
+            <div className="text-xs text-gray-600 bg-white px-2 py-1 rounded shadow">
+              Scanning Drive...
+            </div>
+          </div>
+        )}
+        
+        {/* Fit Toggle Button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setFitMode(fitMode === 'cover' ? 'contain' : 'cover');
+          }}
+          className="absolute top-2 right-2 bg-black bg-opacity-50 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-opacity-70"
+          title={fitMode === 'cover' ? 'Show full image' : 'Fit to frame'}
+        >
+          {fitMode === 'cover' ? '🔍' : '📐'}
+        </button>
+        
+        {/* Stock Badge */}
+        {product.soh && (
+          <div className="absolute top-1 sm:top-2 left-1 sm:left-2 bg-green-500 text-white text-xs px-1 sm:px-2 py-1 rounded-full font-medium shadow-sm z-10">
+            SOH: {product.soh}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // Detect screen size and orientation
   useEffect(() => {
@@ -487,13 +556,6 @@ const OzzCatalog = () => {
       buttonSize: width < 480 ? 'py-2' : 'py-2.5'
     };
   };
-
-  // Enhanced image URL function
-  const getImageUrl = useMemo(() => {
-    return (category, code) => {
-      return imageSystem.getImageUrl(category, code);
-    };
-  }, [imageSystemReady, imageSystem]);
 
   // Filtered products
   const filteredProducts = useMemo(() => {
@@ -738,41 +800,13 @@ const OzzCatalog = () => {
                     className="w-full text-left hover:bg-gray-50 transition-colors"
                     style={{ touchAction: 'manipulation' }}
                   >
-                    <div className="aspect-square bg-gray-50 flex items-center justify-center relative overflow-hidden">
-                      <img 
-                        src={getImageUrl(selectedCategory, product.code)}
-                        alt={product.description}
-                        className="w-full h-full object-cover transition-opacity duration-300"
-                        loading="lazy"
-                        onLoad={(e) => {
-                          if (!e.target.src.includes('data:image/svg+xml')) {
-                            e.target.style.opacity = '1';
-                            console.log(`✅ Image loaded successfully for product ${product.code}`);
-                          }
-                        }}
-                        onError={(e) => {
-                          console.warn(`❌ Failed to load image for product ${product.code}: ${e.target.src}`);
-                        }}
-                        style={{
-                          opacity: imageSystemReady ? '1' : '0.8'
-                        }}
-                      />
-                      
-                      {/* Loading overlay */}
-                      {!imageSystemReady && (
-                        <div className="absolute inset-0 bg-black bg-opacity-10 flex items-center justify-center">
-                          <div className="text-xs text-gray-600 bg-white px-2 py-1 rounded shadow">
-                            Scanning Drive...
-                          </div>
-                        </div>
-                      )}
-                      
-                      {product.soh && (
-                        <div className="absolute top-1 sm:top-2 right-1 sm:right-2 bg-green-500 text-white text-xs px-1 sm:px-2 py-1 rounded-full font-medium shadow-sm z-10">
-                          SOH: {product.soh}
-                        </div>
-                      )}
-                    </div>
+                    {/* Enhanced Image Container with Level 2 Optimization */}
+                    <EnhancedImageContainer 
+                      product={product}
+                      selectedCategory={selectedCategory}
+                      setSelectedProduct={setSelectedProduct}
+                    />
+                    
                     <div className="p-2 sm:p-3">
                       <p className="font-semibold text-gray-900 text-xs sm:text-sm mb-1">
                         {product.code}
@@ -820,9 +854,10 @@ const OzzCatalog = () => {
           <div className="bg-white rounded-xl overflow-hidden shadow-sm max-w-2xl mx-auto">
             <div className="aspect-square bg-gray-50">
               <img 
-                src={getImageUrl(selectedCategory, selectedProduct.code)}
+                src={imageSystem.getImageUrl(selectedCategory, selectedProduct.code)}
                 alt={selectedProduct.description}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain bg-gray-50"
+                style={{ padding: '8px' }}
               />
             </div>
             
