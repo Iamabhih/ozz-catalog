@@ -1,4 +1,4 @@
-// Complete Google Drive Image Integration System
+// Complete Google Drive Image Integration System - FIXED VERSION
 class DriveImageManager {
   constructor() {
     this.imageCache = new Map();
@@ -23,7 +23,7 @@ class DriveImageManager {
       await new Promise(resolve => gapi.load('client', resolve));
       
       await gapi.client.init({
-        apiKey: 'AIzaSyDHKDrY2UUT9_HZhBY6GMAkyHYHIdv7OsA', // Replace with your new secure API key
+        apiKey: 'AIzaSyDHKDrY2UUT9_HZhBY6GMAkyHYHIdv7OsA', // Replace with your secure API key
         discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
       });
       
@@ -156,9 +156,9 @@ class DriveImageManager {
     return [...new Set(codes)];
   }
 
-  // Get direct image URL for embedding
+  // FIXED: Get direct image URL for embedding - now uses Google CDN
   getDirectImageUrl(fileId) {
-    return `https://drive.google.com/uc?export=view&id=${fileId}`;
+    return `https://lh3.googleusercontent.com/d/${fileId}=w800-h800-c`;
   }
 
   // Get image for a specific product code
@@ -295,7 +295,7 @@ const OzzCatalog = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [screenSize, setScreenSize] = useState('mobile');
   
-  // NEW: Image system state
+  // Image system state
   const [imageSystemReady, setImageSystemReady] = useState(false);
   const [imageStats, setImageStats] = useState(null);
 
@@ -413,7 +413,7 @@ const OzzCatalog = () => {
     loadData();
   }, []);
 
-  // NEW: Initialize Google Drive image system
+  // Initialize Google Drive image system
   useEffect(() => {
     const initImages = async () => {
       if (!isLoading && Object.keys(productData).length > 0 && !imageSystemReady) {
@@ -488,7 +488,7 @@ const OzzCatalog = () => {
     };
   };
 
-  // NEW: Enhanced image URL function
+  // Enhanced image URL function
   const getImageUrl = useMemo(() => {
     return (category, code) => {
       return imageSystem.getImageUrl(category, code);
@@ -747,10 +747,11 @@ const OzzCatalog = () => {
                         onLoad={(e) => {
                           if (!e.target.src.includes('data:image/svg+xml')) {
                             e.target.style.opacity = '1';
+                            console.log(`✅ Image loaded successfully for product ${product.code}`);
                           }
                         }}
                         onError={(e) => {
-                          console.warn(`Failed to load image for product ${product.code}`);
+                          console.warn(`❌ Failed to load image for product ${product.code}: ${e.target.src}`);
                         }}
                         style={{
                           opacity: imageSystemReady ? '1' : '0.8'
