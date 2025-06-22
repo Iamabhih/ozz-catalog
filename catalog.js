@@ -23,7 +23,7 @@ class DriveImageManager {
       await new Promise(resolve => gapi.load('client', resolve));
       
       await gapi.client.init({
-        apiKey: 'YOUR_NEW_API_KEY_HERE', // Replace with your new secure API key
+        apiKey: 'AIzaSyDHKDrY2UUT9_HZhBY6GMAkyHYHIdv7OsA', // Replace with your new secure API key
         discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
       });
       
