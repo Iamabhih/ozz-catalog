@@ -1,3 +1,286 @@
+// Complete Google Drive Image Integration System
+class DriveImageManager {
+  constructor() {
+    this.imageCache = new Map();
+    this.folderCache = new Map();
+    this.isInitialized = false;
+    
+    // Your specific folder IDs from Google Drive
+    this.folders = {
+      'Ozz Cash n Carry': '1JsdOirMtPFHhGzFQ5VmqKfJ8Fci7lO78',
+      'Monthly Catalogue 2022': '1EfV8P5bQNwTn8p8C1SsYjWYxkDzofjLb',
+      'Ikhaya/OzzSA': '1tG66zQTXGR-BQwjYZheRHVQ7s4n6-Jan'
+    };
+  }
+
+  // Initialize Google Drive API
+  async initializeGAPI() {
+    if (this.isInitialized) return true;
+    
+    try {
+      // Load Google APIs
+      await this.loadScript('https://apis.google.com/js/api.js');
+      await new Promise(resolve => gapi.load('client', resolve));
+      
+      await gapi.client.init({
+        apiKey: 'YOUR_NEW_API_KEY_HERE', // Replace with your new secure API key
+        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
+      });
+      
+      this.isInitialized = true;
+      console.log('✅ Google Drive API initialized');
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to initialize Google Drive API:', error);
+      return false;
+    }
+  }
+
+  // Load script helper
+  loadScript(src) {
+    return new Promise((resolve, reject) => {
+      if (document.querySelector(`script[src="${src}"]`)) {
+        resolve();
+        return;
+      }
+      
+      const script = document.createElement('script');
+      script.src = src;
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+
+  // Scan all folders for images
+  async scanAllFolders() {
+    console.log('🔍 Scanning Google Drive folders for images...');
+    
+    for (const [folderName, folderId] of Object.entries(this.folders)) {
+      try {
+        const images = await this.scanFolderForImages(folderId);
+        this.folderCache.set(folderName, images);
+        console.log(`📁 ${folderName}: Found ${images.length} images`);
+      } catch (error) {
+        console.error(`❌ Error scanning folder ${folderName}:`, error);
+      }
+    }
+    
+    // Build product code to image mapping
+    this.buildImageMapping();
+    console.log(`🎯 Total images cached: ${this.imageCache.size}`);
+  }
+
+  // Scan a specific folder for images
+  async scanFolderForImages(folderId, pageToken = null) {
+    try {
+      const response = await gapi.client.drive.files.list({
+        q: `'${folderId}' in parents and (mimeType contains 'image/jpeg' or mimeType contains 'image/png' or mimeType contains 'image/gif' or mimeType contains 'image/webp')`,
+        fields: 'nextPageToken, files(id, name, mimeType, parents, webViewLink, thumbnailLink)',
+        pageSize: 100,
+        pageToken: pageToken
+      });
+
+      let files = response.result.files || [];
+      
+      // If there are more pages, fetch them recursively
+      if (response.result.nextPageToken) {
+        const nextPageFiles = await this.scanFolderForImages(folderId, response.result.nextPageToken);
+        files = files.concat(nextPageFiles);
+      }
+      
+      return files;
+    } catch (error) {
+      console.error('Error fetching folder contents:', error);
+      return [];
+    }
+  }
+
+  // Build mapping from product codes to images
+  buildImageMapping() {
+    // Clear existing cache
+    this.imageCache.clear();
+    
+    // Iterate through all cached folders
+    for (const [folderName, images] of this.folderCache.entries()) {
+      images.forEach(image => {
+        // Extract potential product codes from filename
+        const codes = this.extractProductCodes(image.name);
+        
+        codes.forEach(code => {
+          if (!this.imageCache.has(code)) {
+            this.imageCache.set(code, {
+              id: image.id,
+              name: image.name,
+              thumbnailLink: image.thumbnailLink,
+              webViewLink: image.webViewLink,
+              directLink: this.getDirectImageUrl(image.id),
+              folder: folderName,
+              mimeType: image.mimeType
+            });
+          }
+        });
+      });
+    }
+  }
+
+  // Extract product codes from filename
+  extractProductCodes(filename) {
+    const codes = [];
+    
+    // Remove file extension
+    const nameWithoutExt = filename.replace(/\.(jpg|jpeg|png|gif|webp)$/i, '');
+    
+    // Strategy 1: Find exact numeric codes (like "30410", "448217")
+    const numericCodes = nameWithoutExt.match(/\b\d{4,6}\b/g);
+    if (numericCodes) {
+      codes.push(...numericCodes);
+    }
+    
+    // Strategy 2: Find alphanumeric codes (like "22942", "319539")
+    const alphanumericCodes = nameWithoutExt.match(/\b[A-Z0-9]{4,8}\b/gi);
+    if (alphanumericCodes) {
+      codes.push(...alphanumericCodes.map(code => code.toLowerCase()));
+    }
+    
+    // Strategy 3: Split by common delimiters and filter
+    const parts = nameWithoutExt.split(/[-_\s\.]+/);
+    parts.forEach(part => {
+      const cleanPart = part.trim();
+      if (/^\d{4,6}$/.test(cleanPart) || /^[A-Z0-9]{4,8}$/i.test(cleanPart)) {
+        codes.push(cleanPart.toLowerCase());
+      }
+    });
+    
+    // Remove duplicates and return
+    return [...new Set(codes)];
+  }
+
+  // Get direct image URL for embedding
+  getDirectImageUrl(fileId) {
+    return `https://drive.google.com/uc?export=view&id=${fileId}`;
+  }
+
+  // Get image for a specific product code
+  getProductImage(productCode) {
+    const normalizedCode = productCode.toString().toLowerCase().trim();
+    const imageData = this.imageCache.get(normalizedCode);
+    
+    if (imageData) {
+      return {
+        url: imageData.directLink,
+        thumbnail: imageData.thumbnailLink,
+        name: imageData.name,
+        found: true
+      };
+    }
+    
+    return {
+      url: null,
+      thumbnail: null,
+      name: null,
+      found: false
+    };
+  }
+
+  // Get stats about image mapping
+  getStats() {
+    const folderStats = {};
+    for (const [folderName, images] of this.folderCache.entries()) {
+      folderStats[folderName] = images.length;
+    }
+    
+    return {
+      totalImages: Array.from(this.folderCache.values()).reduce((sum, images) => sum + images.length, 0),
+      mappedProducts: this.imageCache.size,
+      folderStats: folderStats
+    };
+  }
+}
+
+// Enhanced image URL function for your catalog
+const createEnhancedImageSystem = () => {
+  const driveManager = new DriveImageManager();
+  let isSystemReady = false;
+  
+  // Initialize the system
+  const initializeImageSystem = async () => {
+    try {
+      const success = await driveManager.initializeGAPI();
+      if (success) {
+        await driveManager.scanAllFolders();
+        isSystemReady = true;
+        
+        // Show stats
+        const stats = driveManager.getStats();
+        console.log('📊 Image System Stats:', stats);
+        
+        // Trigger re-render if images are found
+        if (stats.mappedProducts > 0) {
+          console.log(`🎉 Successfully mapped ${stats.mappedProducts} product images!`);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to initialize image system:', error);
+    }
+  };
+  
+  // Enhanced image URL function
+  const getImageUrl = (category, code) => {
+    if (!isSystemReady) {
+      // Return placeholder while system initializes
+      return generatePlaceholderSVG(category, code, 'Scanning Drive...');
+    }
+    
+    const imageData = driveManager.getProductImage(code);
+    
+    if (imageData.found) {
+      return imageData.url;
+    }
+    
+    // Fallback to placeholder
+    return generatePlaceholderSVG(category, code, 'No image found');
+  };
+  
+  // Generate placeholder SVG
+  const generatePlaceholderSVG = (category, code, message = 'Loading...') => {
+    return `data:image/svg+xml,${encodeURIComponent(`
+      <svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="grad${code.replace(/[^a-zA-Z0-9]/g, '')}" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#f0f9ff;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#dbeafe;stop-opacity:1" />
+          </linearGradient>
+        </defs>
+        <rect width="200" height="200" fill="url(#grad${code.replace(/[^a-zA-Z0-9]/g, '')})" stroke="#3b82f6" stroke-width="2"/>
+        <text x="100" y="60" text-anchor="middle" dy=".3em" font-family="Arial" font-size="16" font-weight="bold" fill="#1e40af">
+          ${code}
+        </text>
+        <text x="100" y="85" text-anchor="middle" dy=".3em" font-family="Arial" font-size="10" fill="#64748b">
+          ${category}
+        </text>
+        <circle cx="100" cy="110" r="12" fill="${message.includes('Scanning') ? '#f59e0b' : '#10b981'}" />
+        <text x="100" y="114" text-anchor="middle" dy=".3em" font-family="Arial" font-size="12" fill="white">${message.includes('Scanning') ? '🔄' : '📱'}</text>
+        <text x="100" y="135" text-anchor="middle" dy=".3em" font-family="Arial" font-size="9" fill="${message.includes('Scanning') ? '#f59e0b' : '#10b981'}" font-weight="bold">
+          ${message.toUpperCase()}
+        </text>
+        <text x="100" y="155" text-anchor="middle" dy=".3em" font-family="Arial" font-size="8" fill="#6b7280">
+          OZZ Catalog
+        </text>
+      </svg>
+    `)}`;
+  };
+  
+  return {
+    initializeImageSystem,
+    getImageUrl,
+    getStats: () => driveManager.getStats(),
+    isReady: () => isSystemReady,
+    driveManager
+  };
+};
+
+// MAIN CATALOG COMPONENT - UPDATED VERSION
 const { useState, useEffect, useMemo } = React;
 
 const OzzCatalog = () => {
@@ -11,6 +294,13 @@ const OzzCatalog = () => {
   const [productData, setProductData] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [screenSize, setScreenSize] = useState('mobile');
+  
+  // NEW: Image system state
+  const [imageSystemReady, setImageSystemReady] = useState(false);
+  const [imageStats, setImageStats] = useState(null);
+
+  // Initialize the image system
+  const imageSystem = useMemo(() => createEnhancedImageSystem(), []);
 
   // Detect screen size and orientation
   useEffect(() => {
@@ -32,7 +322,7 @@ const OzzCatalog = () => {
     updateScreenSize();
     window.addEventListener('resize', updateScreenSize);
     window.addEventListener('orientationchange', () => {
-      setTimeout(updateScreenSize, 100); // Delay for orientation change
+      setTimeout(updateScreenSize, 100);
     });
     
     return () => {
@@ -45,7 +335,6 @@ const OzzCatalog = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Ensure XLSX is loaded
         if (!window.XLSX) {
           console.log('Loading XLSX library...');
           await new Promise((resolve, reject) => {
@@ -124,6 +413,33 @@ const OzzCatalog = () => {
     loadData();
   }, []);
 
+  // NEW: Initialize Google Drive image system
+  useEffect(() => {
+    const initImages = async () => {
+      if (!isLoading && Object.keys(productData).length > 0 && !imageSystemReady) {
+        console.log('🚀 Initializing Google Drive image system...');
+        
+        try {
+          await imageSystem.initializeImageSystem();
+          const stats = imageSystem.getStats();
+          setImageStats(stats);
+          setImageSystemReady(true);
+          
+          console.log('✅ Image system ready!', stats);
+          
+          if (stats.mappedProducts > 0) {
+            console.log(`🎉 Found ${stats.mappedProducts} product images in Google Drive!`);
+          }
+        } catch (error) {
+          console.error('❌ Image system initialization failed:', error);
+          setImageSystemReady(true);
+        }
+      }
+    };
+    
+    initImages();
+  }, [isLoading, productData, imageSystemReady, imageSystem]);
+
   // Category configuration
   const categoryConfig = {
     'Otima ref': { icon: '🎉', color: 'bg-purple-100 border-purple-300' },
@@ -172,34 +488,12 @@ const OzzCatalog = () => {
     };
   };
 
-  // Image URL generator
-  const getImageUrl = (category, code) => {
-    return `data:image/svg+xml,${encodeURIComponent(`
-      <svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="grad${code.replace(/[^a-zA-Z0-9]/g, '')}" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:#f0f9ff;stop-opacity:1" />
-            <stop offset="100%" style="stop-color:#dbeafe;stop-opacity:1" />
-          </linearGradient>
-        </defs>
-        <rect width="200" height="200" fill="url(#grad${code.replace(/[^a-zA-Z0-9]/g, '')})" stroke="#3b82f6" stroke-width="2"/>
-        <text x="100" y="60" text-anchor="middle" dy=".3em" font-family="Arial" font-size="16" font-weight="bold" fill="#1e40af">
-          ${code}
-        </text>
-        <text x="100" y="85" text-anchor="middle" dy=".3em" font-family="Arial" font-size="10" fill="#64748b">
-          ${category}
-        </text>
-        <circle cx="100" cy="110" r="12" fill="#10b981" />
-        <text x="100" y="114" text-anchor="middle" dy=".3em" font-family="Arial" font-size="12" fill="white">📱</text>
-        <text x="100" y="135" text-anchor="middle" dy=".3em" font-family="Arial" font-size="9" fill="#10b981" font-weight="bold">
-          CATALOG LIVE!
-        </text>
-        <text x="100" y="155" text-anchor="middle" dy=".3em" font-family="Arial" font-size="8" fill="#6b7280">
-          Images: Phase 2
-        </text>
-      </svg>
-    `)}`;
-  };
+  // NEW: Enhanced image URL function
+  const getImageUrl = useMemo(() => {
+    return (category, code) => {
+      return imageSystem.getImageUrl(category, code);
+    };
+  }, [imageSystemReady, imageSystem]);
 
   // Filtered products
   const filteredProducts = useMemo(() => {
@@ -310,7 +604,7 @@ const OzzCatalog = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
+      {/* Enhanced Header with Image Status */}
       <header className={`bg-white shadow-sm border-b sticky top-0 z-40 ${config.headerHeight}`}>
         <div className={`${config.padding} h-full`}>
           <div className="flex items-center justify-between h-full">
@@ -340,9 +634,18 @@ const OzzCatalog = () => {
                     selectedProduct.description) :
                  selectedCategory ? selectedCategory : 'Ozz Cash and Carry'}
               </h1>
-              {!selectedProduct && (
+              <div className="flex items-center gap-2">
                 <p className="text-xs sm:text-sm text-gray-500">Sales Catalog</p>
-              )}
+                {/* Image System Status Indicator */}
+                {imageStats && (
+                  <div className="flex items-center gap-1">
+                    <div className={`w-2 h-2 rounded-full ${imageSystemReady ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+                    <span className="text-xs text-gray-400 hidden sm:inline">
+                      {imageStats.mappedProducts} images
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
 
             <button 
@@ -439,8 +742,29 @@ const OzzCatalog = () => {
                       <img 
                         src={getImageUrl(selectedCategory, product.code)}
                         alt={product.description}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover transition-opacity duration-300"
+                        loading="lazy"
+                        onLoad={(e) => {
+                          if (!e.target.src.includes('data:image/svg+xml')) {
+                            e.target.style.opacity = '1';
+                          }
+                        }}
+                        onError={(e) => {
+                          console.warn(`Failed to load image for product ${product.code}`);
+                        }}
+                        style={{
+                          opacity: imageSystemReady ? '1' : '0.8'
+                        }}
                       />
+                      
+                      {/* Loading overlay */}
+                      {!imageSystemReady && (
+                        <div className="absolute inset-0 bg-black bg-opacity-10 flex items-center justify-center">
+                          <div className="text-xs text-gray-600 bg-white px-2 py-1 rounded shadow">
+                            Scanning Drive...
+                          </div>
+                        </div>
+                      )}
                       
                       {product.soh && (
                         <div className="absolute top-1 sm:top-2 right-1 sm:right-2 bg-green-500 text-white text-xs px-1 sm:px-2 py-1 rounded-full font-medium shadow-sm z-10">
