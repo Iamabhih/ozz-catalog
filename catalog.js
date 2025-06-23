@@ -666,7 +666,7 @@ const OzzCatalog = () => {
 
   // Category configuration
   const categoryConfig = {
-    'Otima': { icon: '🎉', color: 'bg-purple-100 border-purple-300' },
+    'Otima ref': { icon: '🎉', color: 'bg-purple-100 border-purple-300' },
     'Glassware': { icon: '🥃', color: 'bg-blue-100 border-blue-300' },
     'Stoneware': { icon: '🍽️', color: 'bg-orange-100 border-orange-300' },
     'Plastic': { icon: '🥤', color: 'bg-green-100 border-green-300' },
