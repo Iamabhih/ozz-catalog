@@ -1,14 +1,14 @@
-// Complete Google Drive Image Integration System with Level 2 Image Optimization
+// Complete Google Drive Image Integration System with PERSISTENT CACHING
 class DriveImageManager {
   constructor() {
     this.imageCache = new Map();
     this.folderCache = new Map();
     this.isInitialized = false;
+    this.cacheVersion = '1.0';
+    this.cacheExpiryHours = 24; // Cache expires after 24 hours
     
     // Your specific folder IDs from Google Drive
     this.folders = {
-      'Ozz Cash n Carry': '1JsdOirMtPFHhGzFQ5VmqKfJ8Fci7lO78',
-      'Monthly Catalogue 2022': '1EfV8P5bQNwTn8p8C1SsYjWYxkDzofjLb',
       'Ikhaya/OzzSA': '1tG66zQTXGR-BQwjYZheRHVQ7s4n6-Jan'
     };
   }
@@ -52,8 +52,128 @@ class DriveImageManager {
     });
   }
 
-  // Scan all folders for images
-  async scanAllFolders() {
+  // PERSISTENT CACHE MANAGEMENT
+  getCacheKey(type) {
+    return `ozz_catalog_${type}_v${this.cacheVersion}`;
+  }
+
+  loadCacheFromStorage() {
+    try {
+      console.log('🔍 Checking for cached image data...');
+      
+      // Load cache metadata
+      const cacheMetaKey = this.getCacheKey('meta');
+      const cacheMetaStr = localStorage.getItem(cacheMetaKey);
+      
+      if (!cacheMetaStr) {
+        console.log('📝 No cache found, will perform full scan');
+        return false;
+      }
+      
+      const cacheMeta = JSON.parse(cacheMetaStr);
+      const cacheAge = Date.now() - cacheMeta.timestamp;
+      const maxAge = this.cacheExpiryHours * 60 * 60 * 1000;
+      
+      if (cacheAge > maxAge) {
+        console.log(`⏰ Cache expired (${Math.round(cacheAge / (60 * 60 * 1000))} hours old), will refresh`);
+        this.clearCache();
+        return false;
+      }
+      
+      // Load folder cache
+      const folderCacheKey = this.getCacheKey('folders');
+      const folderCacheStr = localStorage.getItem(folderCacheKey);
+      
+      // Load image cache
+      const imageCacheKey = this.getCacheKey('images');
+      const imageCacheStr = localStorage.getItem(imageCacheKey);
+      
+      if (!folderCacheStr || !imageCacheStr) {
+        console.log('📝 Incomplete cache found, will perform full scan');
+        return false;
+      }
+      
+      // Restore caches
+      const folderData = JSON.parse(folderCacheStr);
+      const imageData = JSON.parse(imageCacheStr);
+      
+      // Convert back to Maps
+      this.folderCache = new Map(Object.entries(folderData));
+      this.imageCache = new Map(Object.entries(imageData));
+      
+      console.log(`✅ Cache loaded successfully! ${this.imageCache.size} images cached`);
+      console.log(`📊 Cache age: ${Math.round(cacheAge / (60 * 1000))} minutes`);
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Error loading cache:', error);
+      this.clearCache();
+      return false;
+    }
+  }
+
+  saveCacheToStorage() {
+    try {
+      console.log('💾 Saving image cache to storage...');
+      
+      // Save cache metadata
+      const cacheMeta = {
+        timestamp: Date.now(),
+        version: this.cacheVersion,
+        totalImages: this.imageCache.size,
+        folders: Object.keys(this.folders).length
+      };
+      
+      const cacheMetaKey = this.getCacheKey('meta');
+      localStorage.setItem(cacheMetaKey, JSON.stringify(cacheMeta));
+      
+      // Convert Maps to objects for storage
+      const folderData = Object.fromEntries(this.folderCache);
+      const imageData = Object.fromEntries(this.imageCache);
+      
+      // Save folder cache
+      const folderCacheKey = this.getCacheKey('folders');
+      localStorage.setItem(folderCacheKey, JSON.stringify(folderData));
+      
+      // Save image cache
+      const imageCacheKey = this.getCacheKey('images');
+      localStorage.setItem(imageCacheKey, JSON.stringify(imageData));
+      
+      console.log(`✅ Cache saved successfully! ${this.imageCache.size} images cached`);
+    } catch (error) {
+      console.error('❌ Error saving cache:', error);
+      // Clear cache if we can't save (storage might be full)
+      this.clearCache();
+    }
+  }
+
+  clearCache() {
+    try {
+      const keys = ['meta', 'folders', 'images'];
+      keys.forEach(key => {
+        localStorage.removeItem(this.getCacheKey(key));
+      });
+      console.log('🗑️ Cache cleared');
+    } catch (error) {
+      console.error('Error clearing cache:', error);
+    }
+  }
+
+  // Check if we need to refresh cache (for future use)
+  async checkForUpdates() {
+    // This could be enhanced to check if folder modification dates have changed
+    // For now, we rely on cache expiry time
+    return false;
+  }
+
+  // Scan all folders for images with caching
+  async scanAllFolders(forceRefresh = false) {
+    // Try to load from cache first
+    if (!forceRefresh && this.loadCacheFromStorage()) {
+      console.log('🚀 Using cached image data, skipping scan');
+      return;
+    }
+    
     console.log('🔍 Scanning Google Drive folders for images...');
     
     for (const [folderName, folderId] of Object.entries(this.folders)) {
@@ -68,6 +188,10 @@ class DriveImageManager {
     
     // Build product code to image mapping
     this.buildImageMapping();
+    
+    // Save to cache
+    this.saveCacheToStorage();
+    
     console.log(`🎯 Total images cached: ${this.imageCache.size}`);
   }
 
@@ -190,11 +314,37 @@ class DriveImageManager {
       folderStats[folderName] = images.length;
     }
     
+    // Get cache info
+    const cacheMetaKey = this.getCacheKey('meta');
+    const cacheMetaStr = localStorage.getItem(cacheMetaKey);
+    let cacheInfo = null;
+    
+    if (cacheMetaStr) {
+      try {
+        const cacheMeta = JSON.parse(cacheMetaStr);
+        const cacheAge = Date.now() - cacheMeta.timestamp;
+        cacheInfo = {
+          age: Math.round(cacheAge / (60 * 1000)), // minutes
+          timestamp: new Date(cacheMeta.timestamp).toLocaleString()
+        };
+      } catch (error) {
+        console.warn('Could not parse cache metadata');
+      }
+    }
+    
     return {
       totalImages: Array.from(this.folderCache.values()).reduce((sum, images) => sum + images.length, 0),
       mappedProducts: this.imageCache.size,
-      folderStats: folderStats
+      folderStats: folderStats,
+      cacheInfo: cacheInfo
     };
+  }
+
+  // Force refresh cache (useful for manual refresh)
+  async forceRefresh() {
+    console.log('🔄 Forcing cache refresh...');
+    this.clearCache();
+    await this.scanAllFolders(true);
   }
 }
 
@@ -203,17 +353,21 @@ const createEnhancedImageSystem = () => {
   const driveManager = new DriveImageManager();
   let isSystemReady = false;
   
-  // Initialize the system
+  // Initialize the system with caching
   const initializeImageSystem = async () => {
     try {
       const success = await driveManager.initializeGAPI();
       if (success) {
-        await driveManager.scanAllFolders();
+        await driveManager.scanAllFolders(); // This will use cache if available
         isSystemReady = true;
         
         // Show stats
         const stats = driveManager.getStats();
         console.log('📊 Image System Stats:', stats);
+        
+        if (stats.cacheInfo) {
+          console.log(`💾 Cache status: ${stats.cacheInfo.age} minutes old (${stats.cacheInfo.timestamp})`);
+        }
         
         // Trigger re-render if images are found
         if (stats.mappedProducts > 0) {
@@ -229,7 +383,7 @@ const createEnhancedImageSystem = () => {
   const getImageUrl = (category, code) => {
     if (!isSystemReady) {
       // Return placeholder while system initializes
-      return generatePlaceholderSVG(category, code, 'Scanning Drive...');
+      return generatePlaceholderSVG(category, code, 'Loading Cache...');
     }
     
     const imageData = driveManager.getProductImage(code);
@@ -259,9 +413,9 @@ const createEnhancedImageSystem = () => {
         <text x="100" y="85" text-anchor="middle" dy=".3em" font-family="Arial" font-size="10" fill="#64748b">
           ${category}
         </text>
-        <circle cx="100" cy="110" r="12" fill="${message.includes('Scanning') ? '#f59e0b' : '#10b981'}" />
-        <text x="100" y="114" text-anchor="middle" dy=".3em" font-family="Arial" font-size="12" fill="white">${message.includes('Scanning') ? '🔄' : '📱'}</text>
-        <text x="100" y="135" text-anchor="middle" dy=".3em" font-family="Arial" font-size="9" fill="${message.includes('Scanning') ? '#f59e0b' : '#10b981'}" font-weight="bold">
+        <circle cx="100" cy="110" r="12" fill="${message.includes('Loading') || message.includes('Cache') ? '#f59e0b' : '#10b981'}" />
+        <text x="100" y="114" text-anchor="middle" dy=".3em" font-family="Arial" font-size="12" fill="white">${message.includes('Loading') || message.includes('Cache') ? '💾' : '📱'}</text>
+        <text x="100" y="135" text-anchor="middle" dy=".3em" font-family="Arial" font-size="9" fill="${message.includes('Loading') || message.includes('Cache') ? '#f59e0b' : '#10b981'}" font-weight="bold">
           ${message.toUpperCase()}
         </text>
         <text x="100" y="155" text-anchor="middle" dy=".3em" font-family="Arial" font-size="8" fill="#6b7280">
@@ -276,11 +430,12 @@ const createEnhancedImageSystem = () => {
     getImageUrl,
     getStats: () => driveManager.getStats(),
     isReady: () => isSystemReady,
-    driveManager
+    driveManager,
+    forceRefresh: () => driveManager.forceRefresh() // Add manual refresh capability
   };
 };
 
-// MAIN CATALOG COMPONENT - UPDATED VERSION WITH LEVEL 2 IMAGE OPTIMIZATION
+// MAIN CATALOG COMPONENT - UPDATED VERSION WITH PERSISTENT CACHING
 const { useState, useEffect, useMemo } = React;
 
 const OzzCatalog = () => {
@@ -344,7 +499,7 @@ const OzzCatalog = () => {
         {!imageSystemReady && (
           <div className="absolute inset-0 bg-black bg-opacity-10 flex items-center justify-center">
             <div className="text-xs text-gray-600 bg-white px-2 py-1 rounded shadow">
-              Scanning Drive...
+              Loading Cache...
             </div>
           </div>
         )}
@@ -511,7 +666,7 @@ const OzzCatalog = () => {
 
   // Category configuration
   const categoryConfig = {
-    'Otima ref': { icon: '🎉', color: 'bg-purple-100 border-purple-300' },
+    'Otima': { icon: '🎉', color: 'bg-purple-100 border-purple-300' },
     'Glassware': { icon: '🥃', color: 'bg-blue-100 border-blue-300' },
     'Stoneware': { icon: '🍽️', color: 'bg-orange-100 border-orange-300' },
     'Plastic': { icon: '🥤', color: 'bg-green-100 border-green-300' },
@@ -664,9 +819,15 @@ const OzzCatalog = () => {
     </svg>
   );
 
+  const RefreshIcon = ({ className, ...props }) => (
+    <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Enhanced Header with Image Status */}
+      {/* Enhanced Header with Image Status and Refresh Button */}
       <header className={`bg-white shadow-sm border-b sticky top-0 z-40 ${config.headerHeight}`}>
         <div className={`${config.padding} h-full`}>
           <div className="flex items-center justify-between h-full">
@@ -705,23 +866,49 @@ const OzzCatalog = () => {
                     <span className="text-xs text-gray-400 hidden sm:inline">
                       {imageStats.mappedProducts} images
                     </span>
+                    {imageStats.cacheInfo && (
+                      <span className="text-xs text-gray-400 hidden md:inline">
+                        ({imageStats.cacheInfo.age}m)
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
             </div>
 
-            <button 
-              onClick={() => setShowQuote(true)}
-              className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-              style={{ touchAction: 'manipulation' }}
-            >
-              <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6" />
-              {quote.length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                  {quote.length}
-                </span>
+            <div className="flex items-center gap-2">
+              {/* Manual Refresh Button */}
+              {imageSystemReady && (
+                <button 
+                  onClick={async () => {
+                    console.log('🔄 Manual refresh triggered');
+                    setImageSystemReady(false);
+                    await imageSystem.forceRefresh();
+                    const stats = imageSystem.getStats();
+                    setImageStats(stats);
+                    setImageSystemReady(true);
+                  }}
+                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  style={{ touchAction: 'manipulation' }}
+                  title="Refresh image cache"
+                >
+                  <RefreshIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
               )}
-            </button>
+
+              <button 
+                onClick={() => setShowQuote(true)}
+                className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                style={{ touchAction: 'manipulation' }}
+              >
+                <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6" />
+                {quote.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {quote.length}
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </header>
