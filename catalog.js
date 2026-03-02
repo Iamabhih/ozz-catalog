@@ -478,13 +478,20 @@ const OzzCatalog = () => {
           }}
           loading="lazy"
           onLoad={(e) => {
-            if (!e.target.src.includes('data:image/svg+xml')) {
-              setImageLoaded(true);
+            const isPlaceholder = e.target.src.includes('data:image/svg+xml');
+            if (!isPlaceholder) {
               console.log(`✅ Image loaded successfully for product ${product.code}`);
+            }
+            // Resolve spinner for real images immediately; for placeholders, only
+            // once the system is ready (so the "No image found" SVG becomes visible
+            // instead of spinning forever behind the loading overlay).
+            if (!isPlaceholder || imageSystemReady) {
+              setImageLoaded(true);
             }
           }}
           onError={(e) => {
             console.warn(`❌ Failed to load image for product ${product.code}`);
+            setImageLoaded(true); // Stop spinner; container bg-gray-50 shows as fallback
           }}
         />
         
