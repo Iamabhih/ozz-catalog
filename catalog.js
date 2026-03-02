@@ -460,21 +460,21 @@ const OzzCatalog = () => {
   // Enhanced Image Container Component (Level 2)
   const EnhancedImageContainer = ({ product, selectedCategory, setSelectedProduct }) => {
     const [imageLoaded, setImageLoaded] = useState(false);
-    const [fitMode, setFitMode] = useState('cover'); // 'cover' or 'contain'
+    const [fitMode, setFitMode] = useState('contain'); // 'contain' or 'cover'
 
     return (
       <div className="aspect-square bg-gray-50 flex items-center justify-center relative overflow-hidden group">
-        <img 
+        <img
           src={imageSystem.getImageUrl(selectedCategory, product.code)}
           alt={product.description}
-          className={`w-full h-full transition-all duration-300 group-hover:scale-105 ${
-            imageLoaded ? 'opacity-100' : 'opacity-0'
-          }`}
+          className={`w-full h-full transition-all duration-300 ${
+            fitMode === 'cover' ? 'group-hover:scale-105' : ''
+          } ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
           style={{
             objectFit: fitMode,
-            objectPosition: fitMode === 'cover' ? 'center 25%' : 'center',
-            backgroundColor: fitMode === 'contain' ? '#f8fafc' : 'transparent',
-            padding: fitMode === 'contain' ? '8px' : '0'
+            objectPosition: 'center',
+            transform: fitMode === 'contain' ? 'scale(1.15)' : undefined,
+            transformOrigin: 'center center',
           }}
           loading="lazy"
           onLoad={(e) => {
@@ -511,9 +511,9 @@ const OzzCatalog = () => {
             setFitMode(fitMode === 'cover' ? 'contain' : 'cover');
           }}
           className="absolute top-2 right-2 bg-black bg-opacity-50 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-opacity-70"
-          title={fitMode === 'cover' ? 'Show full image' : 'Fit to frame'}
+          title={fitMode === 'contain' ? 'Crop to fill frame' : 'Show full image'}
         >
-          {fitMode === 'cover' ? '🔍' : '📐'}
+          {fitMode === 'contain' ? '📐' : '🔍'}
         </button>
         
         {/* Stock Badge */}
@@ -1043,8 +1043,8 @@ const OzzCatalog = () => {
               <img 
                 src={imageSystem.getImageUrl(selectedCategory, selectedProduct.code)}
                 alt={selectedProduct.description}
-                className="w-full h-full object-contain bg-gray-50"
-                style={{ padding: '8px' }}
+                className="w-full h-full object-contain"
+                style={{ transform: 'scale(1.1)', transformOrigin: 'center center' }}
               />
             </div>
             
