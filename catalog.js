@@ -991,7 +991,7 @@ const OzzCatalog = () => {
                 >
                   <button
                     onClick={() => setSelectedProduct(product)}
-                    className="w-full text-left hover:bg-gray-50 transition-colors"
+                    className="w-full block text-left hover:bg-gray-50 transition-colors"
                     style={{ touchAction: 'manipulation' }}
                   >
                     {/* Enhanced Image Container with Level 2 Optimization */}
@@ -1005,10 +1005,8 @@ const OzzCatalog = () => {
                       <p className="font-semibold text-gray-900 text-xs sm:text-sm mb-1">
                         {product.code}
                       </p>
-                      <p className="text-xs text-gray-600 leading-relaxed line-clamp-2">
-                        {window.innerWidth < 480 && product.description.length > 40 
-                          ? product.description.substring(0, 40) + '...'
-                          : product.description}
+                      <p className="text-xs sm:text-sm text-gray-800 leading-snug line-clamp-2">
+                        {product.description}
                       </p>
                       {product.supplierRef && (
                         <p className="text-xs text-blue-600 mt-1">
