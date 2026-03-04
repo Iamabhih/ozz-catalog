@@ -24,6 +24,45 @@
         .loading { display: flex; justify-content: center; align-items: center; height: 100vh; }
         .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        @media print {
+            /* Chrome's PDF renderer drops -webkit-box display but keeps overflow:hidden,
+               making line-clamped text completely invisible. Force a normal block display. */
+            .line-clamp-2 {
+                display: block !important;
+                overflow: visible !important;
+                -webkit-line-clamp: unset !important;
+                -webkit-box-orient: unset !important;
+            }
+
+            /* Allow the product card to show its full text section without clipping.
+               Target only cards (rounded-xl + overflow-hidden) not image containers. */
+            .rounded-xl.overflow-hidden {
+                overflow: visible !important;
+            }
+
+            /* Re-apply clipping to the image container (aspect-square) so images
+               don't bleed outside their frame. */
+            .aspect-square {
+                overflow: hidden !important;
+            }
+
+            /* Ensure text colours survive PDF rendering */
+            .text-gray-900 { color: #111827 !important; }
+            .text-gray-800 { color: #1f2937 !important; }
+
+            /* Preserve background and badge colours in PDF */
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            /* Hide interactive overlay buttons that shouldn't appear in print */
+            button[title="Crop to fill frame"],
+            button[title="Show full image"] {
+                display: none !important;
+            }
+        }
     </style>
 </head>
 <body>
