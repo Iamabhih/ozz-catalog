@@ -473,8 +473,6 @@ const OzzCatalog = () => {
           style={{
             objectFit: fitMode,
             objectPosition: 'center',
-            transform: fitMode === 'contain' ? 'scale(1.15)' : undefined,
-            transformOrigin: 'center center',
           }}
           loading="lazy"
           onLoad={(e) => {
@@ -525,7 +523,7 @@ const OzzCatalog = () => {
         
         {/* Stock Badge */}
         {product.soh && (
-          <div className="absolute top-1 sm:top-2 left-1 sm:left-2 bg-green-500 text-white text-xs px-1 sm:px-2 py-1 rounded-full font-medium shadow-sm z-10">
+          <div className="absolute bottom-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full font-medium shadow-sm z-10">
             SOH: {product.soh}
           </div>
         )}
@@ -985,23 +983,23 @@ const OzzCatalog = () => {
             
             <div className={`grid ${config.productGrid}`}>
               {filteredProducts.map(product => (
-                <div 
+                <div
                   key={product.code}
-                  className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm"
+                  className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm flex flex-col"
                 >
                   <button
                     onClick={() => setSelectedProduct(product)}
-                    className="w-full block text-left hover:bg-gray-50 transition-colors"
+                    className="w-full flex flex-col text-left hover:bg-gray-50 transition-colors flex-1"
                     style={{ touchAction: 'manipulation' }}
                   >
                     {/* Enhanced Image Container with Level 2 Optimization */}
-                    <EnhancedImageContainer 
+                    <EnhancedImageContainer
                       product={product}
                       selectedCategory={selectedCategory}
                       setSelectedProduct={setSelectedProduct}
                     />
-                    
-                    <div className="p-2 sm:p-3">
+
+                    <div className="p-2 sm:p-3 flex-1">
                       <p className="font-semibold text-gray-900 text-xs sm:text-sm mb-1">
                         {product.code}
                       </p>
